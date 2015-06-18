@@ -18,7 +18,7 @@ class UsageOptions(usage.Options):
         ['factor', 'f', 0.8,
          'What factor should be used for triggering censorship (0.8 == 80%)']]
     optFlags = [
-        ["withoutbody","B", "Don't send page body with report"],
+        ["withoutbody","B", "don't include HTTP response body inside of the report"],
         ]
 
 
