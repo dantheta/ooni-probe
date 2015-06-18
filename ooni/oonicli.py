@@ -9,10 +9,6 @@ from twisted.python import usage
 from twisted.python.util import spewer
 from twisted.internet import defer, reactor, protocol, task
 
-import pika
-from pika import exceptions
-from pika.adapters import twisted_connection
-
 from ooni import errors, __version__
 
 from ooni.settings import config
@@ -341,6 +337,18 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
     Instance the director, parse command line options and start an ooniprobe
     test!
     """
+
+    try:
+        import pika
+        from pika import exceptions
+        from pika.adapters import twisted_connection
+    except ImportError:
+        print "Pika is required for queue connection."
+        print "Install with \"pip install pika\"".
+        sys.exit(7)
+
+
+
     global_options = parseOptions()
     config.global_options = global_options
     config.set_paths()

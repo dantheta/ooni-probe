@@ -9,8 +9,6 @@ copy_reg._reduce_ex = patched_reduce_ex
 
 code=0
 
-# from ooni.oonicli import run
-# run()
 from ooni.oonicli import runWithDaemonDirector
 d = runWithDaemonDirector()
 @d.addBoth
