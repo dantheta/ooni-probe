@@ -344,7 +344,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
         from pika.adapters import twisted_connection
     except ImportError:
         print "Pika is required for queue connection."
-        print "Install with \"pip install pika\"".
+        print "Install with \"pip install pika\"."
         sys.exit(7)
 
 
