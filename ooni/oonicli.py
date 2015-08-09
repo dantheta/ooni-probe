@@ -389,7 +389,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
         start_tor = True
 
 
-    def run_test(url=None, filename=None):
+    def run_test(global_options, url=None, filename=None):
         assert url is not None or filename is not None
 
         deck = createDeck(global_options, url=url, filename=filename)
