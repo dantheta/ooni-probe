@@ -193,6 +193,7 @@ def setupGlobalOptions(logging, start_tor, check_incoherences):
             log.err("Insufficient Privileges to capture packets."
                     " See ooniprobe.conf privacy.includepcap")
             sys.exit(2)
+    return global_options
 
 def setupAnnotations(global_options):
     annotations={}
