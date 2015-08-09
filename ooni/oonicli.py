@@ -165,7 +165,7 @@ def director_startup_other_failures(failure):
     log.err("An unhandled exception occurred while starting the director!")
     log.exception(failure)
 
-def setup_global_options():
+def setupGlobalOptions():
     global_options = parseOptions()
     config.global_options = global_options
     config.set_paths()
@@ -193,7 +193,7 @@ def setup_global_options():
                     " See ooniprobe.conf privacy.includepcap")
             sys.exit(2)
 
-def setup_annotations(global_options):
+def setupAnnotations(global_options):
     annotations={}
     for annotation in global_options["annotations"].split(","):
         pair = annotation.split(":")
@@ -206,6 +206,23 @@ def setup_annotations(global_options):
             sys.exit(1)
     global_options["annotations"] = annotations
     return annotations
+
+def setupCollector(global_options, net_test_loader):
+    collector = None
+    if not global_options['no-collector']:
+        if global_options['collector']:
+            collector = global_options['collector']
+        elif 'collector' in config.reports \
+                and config.reports['collector']:
+            collector = config.reports['collector']
+        elif net_test_loader.collector:
+            collector = net_test_loader.collector
+
+    if collector and collector.startswith('httpo:') \
+            and (not (config.tor_state or config.tor.socks_port)):
+        raise errors.TorNotRunning
+    return collector
+
 
 def createDeck(global_options,url=None,filename=None):
     log.msg("Creating deck for: %s" %(url or filename,) )
@@ -249,29 +266,13 @@ def createDeck(global_options,url=None,filename=None):
         sys.exit(5)
     return deck
 
-def setup_collector(global_options):
-    collector = None
-    if not global_options['no-collector']:
-        if global_options['collector']:
-            collector = global_options['collector']
-        elif 'collector' in config.reports \
-                and config.reports['collector']:
-            collector = config.reports['collector']
-        elif net_test_loader.collector:
-            collector = net_test_loader.collector
-
-    if collector and collector.startswith('httpo:') \
-            and (not (config.tor_state or config.tor.socks_port)):
-        raise errors.TorNotRunning
-    return collector
-
 def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
     """
     Instance the director, parse command line options and start an ooniprobe
     test!
     """
 
-    global_options = setup_global_options()
+    global_options = setupGlobalOptions()
 
     director = Director()
     if global_options['list']:
@@ -292,7 +293,7 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
         sys.exit(0)
 
     if global_options.get('annotations') is not None:
-        annotations = setup_annotations(global_options)
+        annotations = setupAnnotations(global_options)
 
     if global_options['no-collector']:
         log.msg("Not reporting using a collector")
@@ -330,7 +331,7 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
             # deck is a singleton, the default collector set in
             # ooniprobe.conf will be used
 
-            collector = setup_collector(global_options)
+            collector = setupCollector(global_options, net_test_loader)
 
             test_details = net_test_loader.testDetails
             test_details['annotations'] = global_options['annotations']
@@ -372,12 +373,12 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
 
 
 
-    global_options = setup_global_options()
+    global_options = setupGlobalOptions()
 
     director = Director()
 
     if global_options.get('annotations') is not None:
-        annotations = setup_annotations(global_options)
+        annotations = setupAnnotations(global_options)
 
     if global_options['no-collector']:
         log.msg("Not reporting using a collector")
@@ -416,7 +417,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
                 # deck is a singleton, the default collector set in
                 # ooniprobe.conf will be used
 
-                collector = setup_collector(global_options)
+                collector = setupCollector(global_options, net_test_loader)
 
                 test_details = net_test_loader.testDetails
                 test_details['annotations'] = global_options['annotations']
