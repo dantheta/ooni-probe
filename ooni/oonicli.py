@@ -351,10 +351,7 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
     
 
 # this variant version of runWithDirector splits the process in two,
-# allowing a single director instance to be reused with multiple decks
-# Some clever refactoring could reunite this with its original, but I'm
-# wary of disturbing the original.  In particular, the start_tor variable
-# was problematic.
+# allowing a single director instance to be reused with multiple decks.
 
 def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True):
     """
