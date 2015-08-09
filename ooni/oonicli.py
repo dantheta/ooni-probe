@@ -165,11 +165,7 @@ def director_startup_other_failures(failure):
     log.err("An unhandled exception occurred while starting the director!")
     log.exception(failure)
 
-def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
-    """
-    Instance the director, parse command line options and start an ooniprobe
-    test!
-    """
+def setup_global_options():
     global_options = parseOptions()
     config.global_options = global_options
     config.set_paths()
@@ -197,48 +193,25 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
                     " See ooniprobe.conf privacy.includepcap")
             sys.exit(2)
 
-    director = Director()
-    if global_options['list']:
-        print "# Installed nettests"
-        for net_test_id, net_test in director.getNetTests().items():
-            print "* %s (%s/%s)" % (net_test['name'],
-                                    net_test['category'],
-                                    net_test['id'])
-            print "  %s" % net_test['description']
+def setup_annotations(global_options):
+    annotations={}
+    for annotation in global_options["annotations"].split(","):
+        pair = annotation.split(":")
+        if len(pair) == 2:
+            key = pair[0].strip()
+            value = pair[1].strip()
+            annotations[key] = value
+        else:
+            log.err("Invalid annotation: %s" % annotation)
+            sys.exit(1)
+    global_options["annotations"] = annotations
+    return annotations
 
-        sys.exit(0)
-
-    elif global_options['printdeck']:
-        del global_options['printdeck']
-        print "# Copy and paste the lines below into a test deck to run the specified test with the specified arguments"
-        print yaml.safe_dump([{'options': global_options}]).strip()
-
-        sys.exit(0)
-
-    if global_options.get('annotations') is not None:
-        annotations = {}
-        for annotation in global_options["annotations"].split(","):
-            pair = annotation.split(":")
-            if len(pair) == 2:
-                key = pair[0].strip()
-                value = pair[1].strip()
-                annotations[key] = value
-            else:
-                log.err("Invalid annotation: %s" % annotation)
-                sys.exit(1)
-        global_options["annotations"] = annotations
-
-    if global_options['no-collector']:
-        log.msg("Not reporting using a collector")
-        global_options['collector'] = None
-        start_tor = False
-    else:
-        start_tor = True
+def createDeck(global_options,url=None,filename=None):
+    log.msg("Creating deck for: %s" %(url or filename,) )
 
     deck = Deck(no_collector=global_options['no-collector'])
     deck.bouncer = global_options['bouncer']
-    if global_options['collector']:
-        start_tor |= True
 
     try:
         if global_options['testdeck']:
@@ -246,7 +219,13 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
         else:
             log.debug("No test deck detected")
             test_file = nettest_to_path(global_options['test_file'], True)
-            net_test_loader = NetTestLoader(global_options['subargs'],
+            if url is not None:
+                args = ('-u',url)
+            else:
+                args = ('-f',filename)
+            if any(global_options['subargs']):
+                args = global_options['subargs'] + args
+            net_test_loader = NetTestLoader(args,
                                             test_file=test_file)
             if global_options['collector']:
                 net_test_loader.collector = global_options['collector']
@@ -268,6 +247,64 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
             log.exception(e)
         log.err(e)
         sys.exit(5)
+    return deck
+
+def setup_collector(global_options):
+    collector = None
+    if not global_options['no-collector']:
+        if global_options['collector']:
+            collector = global_options['collector']
+        elif 'collector' in config.reports \
+                and config.reports['collector']:
+            collector = config.reports['collector']
+        elif net_test_loader.collector:
+            collector = net_test_loader.collector
+
+    if collector and collector.startswith('httpo:') \
+            and (not (config.tor_state or config.tor.socks_port)):
+        raise errors.TorNotRunning
+    return collector
+
+def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
+    """
+    Instance the director, parse command line options and start an ooniprobe
+    test!
+    """
+
+    global_options = setup_global_options()
+
+    director = Director()
+    if global_options['list']:
+        print "# Installed nettests"
+        for net_test_id, net_test in director.getNetTests().items():
+            print "* %s (%s/%s)" % (net_test['name'],
+                                    net_test['category'],
+                                    net_test['id'])
+            print "  %s" % net_test['description']
+
+        sys.exit(0)
+
+    elif global_options['printdeck']:
+        del global_options['printdeck']
+        print "# Copy and paste the lines below into a test deck to run the specified test with the specified arguments"
+        print yaml.safe_dump([{'options': global_options}]).strip()
+
+        sys.exit(0)
+
+    if global_options.get('annotations') is not None:
+        annotations = setup_annotations(global_options)
+
+    if global_options['no-collector']:
+        log.msg("Not reporting using a collector")
+        global_options['collector'] = None
+        start_tor = False
+    else:
+        start_tor = True
+
+    if global_options['collector']:
+        start_tor |= True
+
+    deck = createDeck(global_options)
 
     start_tor |= deck.requiresTor
     d = director.start(start_tor=start_tor,
@@ -293,19 +330,7 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
             # deck is a singleton, the default collector set in
             # ooniprobe.conf will be used
 
-            collector = None
-            if not global_options['no-collector']:
-                if global_options['collector']:
-                    collector = global_options['collector']
-                elif 'collector' in config.reports \
-                        and config.reports['collector']:
-                    collector = config.reports['collector']
-                elif net_test_loader.collector:
-                    collector = net_test_loader.collector
-
-            if collector and collector.startswith('httpo:') \
-                    and (not (config.tor_state or config.tor.socks_port)):
-                raise errors.TorNotRunning
+            collector = setup_collector(global_options)
 
             test_details = net_test_loader.testDetails
             test_details['annotations'] = global_options['annotations']
@@ -315,14 +340,14 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
                                   collector)
         return director.allTestsDone
 
-    def start():
-        d.addCallback(setup_nettest)
-        d.addCallback(post_director_start)
-        d.addErrback(director_startup_handled_failures)
-        d.addErrback(director_startup_other_failures)
-        return d
 
-    return start()
+    d.addCallback(setup_nettest)
+    d.addCallback(post_director_start)
+    d.addErrback(director_startup_handled_failures)
+    d.addErrback(director_startup_other_failures)
+    return d
+
+    
 
 # this variant version of runWithDirector splits the process in two,
 # allowing a single director instance to be reused with multiple decks
@@ -347,47 +372,12 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
 
 
 
-    global_options = parseOptions()
-    config.global_options = global_options
-    config.set_paths()
-    config.initialize_ooni_home()
-    try:
-        config.read_config_file(check_incoherences=check_incoherences)
-    except errors.ConfigFileIncoherent:
-        sys.exit(6)
-
-    if global_options['verbose']:
-        config.advanced.debug = True
-
-    if not start_tor:
-        config.advanced.start_tor = False
-
-    if logging:
-        log.start(global_options['logfile'])
-
-    if config.privacy.includepcap:
-        if hasRawSocketPermission():
-            from ooni.utils.txscapy import ScapyFactory
-            config.scapyFactory = ScapyFactory(config.advanced.interface)
-        else:
-            log.err("Insufficient Privileges to capture packets."
-                    " See ooniprobe.conf privacy.includepcap")
-            sys.exit(2)
+    global_options = setup_global_options()
 
     director = Director()
 
     if global_options.get('annotations') is not None:
-        annotations = {}
-        for annotation in global_options["annotations"].split(","):
-            pair = annotation.split(":")
-            if len(pair) == 2:
-                key = pair[0].strip()
-                value = pair[1].strip()
-                annotations[key] = value
-            else:
-                log.err("Invalid annotation: %s" % annotation)
-                sys.exit(1)
-        global_options["annotations"] = annotations
+        annotations = setup_annotations(global_options)
 
     if global_options['no-collector']:
         log.msg("Not reporting using a collector")
@@ -396,47 +386,11 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
     else:
         start_tor = True
 
-    def createDeck(url=None,filename=None):
+
+    def run_test(url=None, filename=None):
         assert url is not None or filename is not None
-        log.msg("Creating deck for: %s" %(url or filename,) )
 
-        deck = Deck(no_collector=global_options['no-collector'])
-        deck.bouncer = global_options['bouncer']
-
-        try:
-            if global_options['testdeck']:
-                deck.loadDeck(global_options['testdeck'])
-            else:
-                log.debug("No test deck detected")
-                test_file = nettest_to_path(global_options['test_file'], True)
-                if url is not None:
-                    args = ('-u',url)
-                else:
-                    args = ('-f',filename)
-                if any(global_options['subargs']):
-                    args = global_options['subargs'] + args
-                net_test_loader = NetTestLoader(args,
-                                                test_file=test_file)
-                if global_options['collector']:
-                    net_test_loader.collector = global_options['collector']
-                deck.insert(net_test_loader)
-        except errors.MissingRequiredOption as option_name:
-            log.err('Missing required option: "%s"' % option_name)
-            incomplete_net_test_loader = option_name.net_test_loader
-            print incomplete_net_test_loader.usageOptions().getUsage()
-            sys.exit(2)
-        except errors.NetTestNotFound as path:
-            log.err('Requested NetTest file not found (%s)' % path)
-            sys.exit(3)
-        except errors.OONIUsageError as e:
-            log.err(e)
-            print e.net_test_loader.usageOptions().getUsage()
-            sys.exit(4)
-        except Exception as e:
-            if config.advanced.debug:
-                log.exception(e)
-            log.err(e)
-            sys.exit(5)
+        deck = createDeck(global_options, url=url, filename=filename)
 
         d = director.start(start_tor=True,
                            check_incoherences=check_incoherences)
@@ -462,19 +416,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
                 # deck is a singleton, the default collector set in
                 # ooniprobe.conf will be used
 
-                collector = None
-                if not global_options['no-collector']:
-                    if global_options['collector']:
-                        collector = global_options['collector']
-                    elif 'collector' in config.reports \
-                            and config.reports['collector']:
-                        collector = config.reports['collector']
-                    elif net_test_loader.collector:
-                        collector = net_test_loader.collector
-
-                if collector and collector.startswith('httpo:') \
-                        and (not (config.tor_state or config.tor.socks_port)):
-                    raise errors.TorNotRunning
+                collector = setup_collector(global_options)
 
                 test_details = net_test_loader.testDetails
                 test_details['annotations'] = global_options['annotations']
@@ -483,16 +425,12 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
                                       global_options['reportfile'],
                                       collector)
             return director.allTestsDone
-
-        def start():
-            d.addCallback(setup_nettest)
-            d.addCallback(post_director_start)
-            d.addErrback(director_startup_handled_failures)
-            d.addErrback(director_startup_other_failures)
-            return d
-
-        return start()
-
+ 
+        d.addCallback(setup_nettest)
+        d.addCallback(post_director_start)
+        d.addErrback(director_startup_handled_failures)
+        d.addErrback(director_startup_other_failures)
+        return d
 
     finished = defer.Deferred()
 
@@ -518,7 +456,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
                 # acknowledge the message
                 ch.basic_ack(delivery_tag=method.delivery_tag)
 
-                d = createDeck(url=data['url'].encode('utf8'))
+                d = run_test(global_options, url=data['url'].encode('utf8'))
                 # When the test has been completed, go back to waiting for a message.
                 d.addCallback(readmsg, channel, queue_object, consumer_tag, counter+1)
             except exceptions.AMQPError,v:
