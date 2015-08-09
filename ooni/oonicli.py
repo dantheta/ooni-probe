@@ -19,8 +19,6 @@ from ooni.nettest import NetTestLoader
 from ooni.utils import log
 from ooni.utils.net import hasRawSocketPermission
 
-lifetime = random.randint(820,1032)
-counter = 0
 
 
 class LifetimeExceeded(Exception): pass
@@ -499,8 +497,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
     finished = defer.Deferred()
 
     @defer.inlineCallbacks
-    def readmsg(_,channel, queue_object, consumer_tag):
-        global counter, lifetime
+    def readmsg(_,channel, queue_object, consumer_tag, counter):
 
         # Wait for a message and decode it.
         if counter >= lifetime:
@@ -523,7 +520,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
 
                 d = createDeck(url=data['url'].encode('utf8'))
                 # When the test has been completed, go back to waiting for a message.
-                d.addCallback(readmsg, channel, queue_object, consumer_tag)
+                d.addCallback(readmsg, channel, queue_object, consumer_tag, counter+1)
             except exceptions.AMQPError,v:
                 finished.errback(v)
 
@@ -537,7 +534,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
         queue_object, consumer_tag = yield channel.basic_consume(
                                                    queue=name,
                                                    no_ack=False)
-        readmsg(None,channel,queue_object,consumer_tag)
+        readmsg(None,channel,queue_object,consumer_tag, 0)
 
 
 
@@ -545,6 +542,9 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
     # to be submitted through an HTTP server interface or something.
     urlp = urlparse.urlparse(config.global_options['queue'])
     urlargs = dict(urlparse.parse_qsl(urlp.query))
+
+    # random lifetime requests counter
+    lifetime = random.randint(820,1032)
 
     # AMQP connection details are sent through the cmdline parameter '-Q'
     
