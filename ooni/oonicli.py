@@ -240,8 +240,10 @@ def createDeck(global_options,url=None,filename=None):
             test_file = nettest_to_path(global_options['test_file'], True)
             if url is not None:
                 args = ('-u',url)
-            else:
+            elif filename is not None:
                 args = ('-f',filename)
+            else:
+                args = []
             if any(global_options['subargs']):
                 args = global_options['subargs'] + args
             net_test_loader = NetTestLoader(args,
