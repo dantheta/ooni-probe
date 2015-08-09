@@ -1,4 +1,5 @@
 import sys
+
 import os
 import json
 import yaml
@@ -165,7 +166,7 @@ def director_startup_other_failures(failure):
     log.err("An unhandled exception occurred while starting the director!")
     log.exception(failure)
 
-def setupGlobalOptions():
+def setupGlobalOptions(check_incoherences):
     global_options = parseOptions()
     config.global_options = global_options
     config.set_paths()
@@ -272,7 +273,7 @@ def runWithDirector(logging=True, start_tor=True, check_incoherences=True):
     test!
     """
 
-    global_options = setupGlobalOptions()
+    global_options = setupGlobalOptions(check_incoherences)
 
     director = Director()
     if global_options['list']:
@@ -370,7 +371,7 @@ def runWithDaemonDirector(logging=True, start_tor=True, check_incoherences=True)
 
 
 
-    global_options = setupGlobalOptions()
+    global_options = setupGlobalOptions(check_incoherences)
 
     director = Director()
 
