@@ -243,7 +243,7 @@ def createDeck(global_options,url=None,filename=None):
             elif filename is not None:
                 args = ('-f',filename)
             else:
-                args = []
+                args = (,)
             if any(global_options['subargs']):
                 args = global_options['subargs'] + args
             net_test_loader = NetTestLoader(args,
